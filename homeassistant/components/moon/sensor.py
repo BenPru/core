@@ -1,6 +1,7 @@
 """Support for tracking the moon phases."""
 from astral import Astral
 import voluptuous as vol
+import datetime
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import CONF_NAME
@@ -9,6 +10,7 @@ from homeassistant.helpers.entity import Entity
 import homeassistant.util.dt as dt_util
 
 DEFAULT_NAME = "Moon"
+DAY_FULL_MOON = 14
 
 STATE_FIRST_QUARTER = "first_quarter"
 STATE_FULL_MOON = "full_moon"
@@ -18,6 +20,9 @@ STATE_WANING_CRESCENT = "waning_crescent"
 STATE_WANING_GIBBOUS = "waning_gibbous"
 STATE_WAXING_GIBBOUS = "waxing_gibbous"
 STATE_WAXING_CRESCENT = "waxing_crescent"
+
+STATE_ATTR_NEXT_FULL_MOON = "next_full_moon"
+STATE_ATTR_NEXT_NEW_MOON = "next_new_moon"
 
 MOON_ICONS = {
     STATE_FIRST_QUARTER: "mdi:moon-first-quarter",
@@ -49,6 +54,7 @@ class MoonSensor(Entity):
         """Initialize the moon sensor."""
         self._name = name
         self._state = None
+        self.next_full_moon = self.next_new_moon = None
         self._astral = Astral()
 
     @property
@@ -70,9 +76,9 @@ class MoonSensor(Entity):
             return STATE_WAXING_CRESCENT
         if self._state == 7:
             return STATE_FIRST_QUARTER
-        if self._state < 14:
+        if self._state < DAY_FULL_MOON:
             return STATE_WAXING_GIBBOUS
-        if self._state == 14:
+        if self._state == DAY_FULL_MOON:
             return STATE_FULL_MOON
         if self._state < 21:
             return STATE_WANING_GIBBOUS
@@ -80,6 +86,14 @@ class MoonSensor(Entity):
             return STATE_LAST_QUARTER
         return STATE_WANING_CRESCENT
 
+    @property
+    def state_attributes(self):
+        """Return the state attributes of the moon."""
+        return {
+            STATE_ATTR_NEXT_FULL_MOON: self.next_full_moon,
+            STATE_ATTR_NEXT_NEW_MOON: self.next_new_moon,
+        }
+    
     @property
     def icon(self):
         """Icon to use in the frontend, if any."""
@@ -89,3 +103,8 @@ class MoonSensor(Entity):
         """Get the time and updates the states."""
         today = dt_util.as_local(dt_util.utcnow()).date()
         self._state = self._astral.moon_phase(today)
+        next_full_moon_days = DAY_FULL_MOON - self._state
+        next_full_moon_days = next_full_moon_days + 28 if next_full_moon_days < 1 else next_full_moon_days
+        self.next_full_moon = today + datetime.timedelta(days=next_full_moon_days)
+        next_new_moon_days = self._state + 28 if self._state < 1 else self._state
+        self.next_new_moon = today + datetime.timedelta(days=next_new_moon_days)
